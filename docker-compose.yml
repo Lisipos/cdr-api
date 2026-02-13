@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    volumes:
+      - ./output:/app/output
+    environment:
+      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
+      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+
+  worker:
+    build: .
+    command: celery -A app.tasks worker --loglevel=info
+    depends_on:
+      - redis
+    volumes:
+      - ./output:/app/output
+    environment:
+      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
+      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
