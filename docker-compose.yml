@@ -10,10 +10,8 @@ services:
       - redis
     volumes:
       - ./output:/app/output
-    environment:
-      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
-      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
-      - INTERNAL_API_TOKEN=${INTERNAL_API_TOKEN}
+    env_file:
+      - .env
 
   worker:
     build: .
@@ -22,9 +20,8 @@ services:
       - redis
     volumes:
       - ./output:/app/output
-    environment:
-      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
-      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY}
+    env_file:
+      - .env
 
   redis:
     image: redis:7
