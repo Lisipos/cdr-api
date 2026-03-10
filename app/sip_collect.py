@@ -5,9 +5,8 @@ import html
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from app.config import USERNAME, PASSWORD
 
-USERNAME = "felipe.uglar"
-PASSWORD = "vITfz2hgN80h"
 
 
 def calcular_periodo():
