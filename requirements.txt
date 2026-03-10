@@ -5,3 +5,5 @@ pandas
 celery
 redis
 python-multipart
+requests
+selenium

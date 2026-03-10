@@ -8,8 +8,56 @@ from fastapi.responses import FileResponse
 from app.models import CDRRequest
 from app.tasks import celery_app
 import os
+from celery.schedules import crontab
+from app.sip_stats import task_coletar_sip
+from app.sip_collect import coletar_sip_stats
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-app = FastAPI(dependencies=[Depends(verificar_token)])
+app = FastAPI()
+# app = FastAPI(dependencies=[Depends(verificar_token)])
+
+@app.post("/coletar-sip")
+def coletar_sip_manual():
+
+    task = task_coletar_sip.delay()
+
+    return {
+        "job_id": task.id,
+        "status": "processando"
+    }
+
+SERVIDORES = {
+    "SP1": "https://newvoz.nvtelecom.com.br",
+    "SP1_NOVA": "https://sp1-newvoz.nvtelecom.com.br",
+    "SP2": "https://sp2-newvoz.nvtelecom.com.br"
+}
+
+
+@app.get("/sip-report")
+def sip_report():
+
+    resultado = {}
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+
+        futures = {
+            executor.submit(coletar_sip_stats, url): nome
+            for nome, url in SERVIDORES.items()
+        }
+
+        for future in as_completed(futures):
+
+            nome = futures[future]
+
+            try:
+
+                resultado[nome] = future.result()
+
+            except Exception as e:
+
+                resultado[nome] = {"erro": str(e)}
+
+    return resultado
 
 @app.post("/gerar-cdr")
 def gerar(dados: CDRRequest):

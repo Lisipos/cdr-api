@@ -10,8 +10,12 @@ services:
       - redis
     volumes:
       - ./output:/app/output
+      - ./exports:/app/exports
+      - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
+    environment:
+      - TZ=America/Sao_Paulo
 
   worker:
     build: .
@@ -20,10 +24,25 @@ services:
       - redis
     volumes:
       - ./output:/app/output
+      - ./exports:/app/exports
+      - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
+    environment:
+      - TZ=America/Sao_Paulo
 
   redis:
     image: redis:7
     ports:
       - "6379:6379"
+
+  beat:
+    build: .
+    command: celery -A app.tasks beat --loglevel=info
+    depends_on:
+      - redis
+    volumes:
+      - ./output:/app/output
+      - ./exports:/app/exports
+    env_file:
+      - .env
