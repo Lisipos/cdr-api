@@ -9,5 +9,24 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 
+GRAPH_TENANT_ID = os.getenv("GRAPH_TENANT_ID")
+GRAPH_CLIENT_ID = os.getenv("GRAPH_CLIENT_ID")
+GRAPH_CLIENT_SECRET = os.getenv("GRAPH_CLIENT_SECRET")
+
+EMAIL_FROM = "felipe.uglar@nvtelecom.com.br"
+EMAIL_TO = [
+    "felipe.uglar@nvtelecom.com.br",
+    "gabriel.veloso@nvtelecom.com.br"
+]
+
+LIMITE_COMPLETAMENTO = 5
+
+SERVIDORES = {
+    "SP1": "https://newvoz.nvtelecom.com.br",
+    "SP1_NOVA": "https://sp1-newvoz.nvtelecom.com.br",
+    "SP2": "https://sp2-newvoz.nvtelecom.com.br"
+}
+
+
 def get_api_url():
     return f"{API_BASE_URL}/{API_TOKEN}/{API_KEY}"

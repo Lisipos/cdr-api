@@ -9,9 +9,10 @@ from app.models import CDRRequest
 from app.tasks import celery_app
 import os
 from celery.schedules import crontab
-from app.sip_stats import task_coletar_sip
+from app.tasks import task_coletar_sip
 from app.sip_collect import coletar_sip_stats
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from app.config import SERVIDORES
 
 app = FastAPI()
 # app = FastAPI(dependencies=[Depends(verificar_token)])
@@ -26,38 +27,34 @@ def coletar_sip_manual():
         "status": "processando"
     }
 
-SERVIDORES = {
-    "SP1": "https://newvoz.nvtelecom.com.br",
-    "SP1_NOVA": "https://sp1-newvoz.nvtelecom.com.br",
-    "SP2": "https://sp2-newvoz.nvtelecom.com.br"
-}
 
 
-@app.get("/sip-report")
-def sip_report():
 
-    resultado = {}
+# @app.get("/sip-report")
+# def sip_report():
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+#     resultado = {}
 
-        futures = {
-            executor.submit(coletar_sip_stats, url): nome
-            for nome, url in SERVIDORES.items()
-        }
+#     with ThreadPoolExecutor(max_workers=3) as executor:
 
-        for future in as_completed(futures):
+#         futures = {
+#             executor.submit(coletar_sip_stats, url): nome
+#             for nome, url in SERVIDORES.items()
+#         }
 
-            nome = futures[future]
+#         for future in as_completed(futures):
 
-            try:
+#             nome = futures[future]
 
-                resultado[nome] = future.result()
+#             try:
 
-            except Exception as e:
+#                 resultado[nome] = future.result()
 
-                resultado[nome] = {"erro": str(e)}
+#             except Exception as e:
 
-    return resultado
+#                 resultado[nome] = {"erro": str(e)}
+
+#     return resultado
 
 @app.post("/gerar-cdr")
 def gerar(dados: CDRRequest):
