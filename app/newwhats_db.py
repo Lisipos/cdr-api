@@ -18,9 +18,6 @@ def parse_valor(valor):
 
 def parse_data(data_str):
 
-    return datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S")
-
-
     formatos = [
         "%Y-%m-%d %H:%M:%S",
         "%d/%m/%Y %H:%M:%S"
@@ -45,7 +42,7 @@ def carregar_tipos(cursor):
     return {tipo.strip(): tid for tid, tipo in cursor.fetchall()}
 
 
-def buscar_historico(session, first_day, last_day):
+def buscar_historico(session, first_day, last_day, start):
 
     r = session.get(f"{BASE_URL}/historico", timeout=30)
 
@@ -62,8 +59,8 @@ def buscar_historico(session, first_day, last_day):
         "tarifa": "",
         "tarifa_v2": "",
         "v2": "3",
-        "length": "100000",
-        "start": "0"
+        "length": "1000",
+        "start": str(start)
     }
 
     r = session.post(
@@ -82,101 +79,96 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
     tipos = carregar_tipos(cursor)
 
-    soup = buscar_historico(session, first_day, last_day)
-
-    linhas = soup.select("#table_id tbody tr")
-
-    if not linhas:
-        print("Nenhum registro encontrado.")
-        return 0
-
-    dados = []
+    start = 0
     total_registros = 0
 
-    for linha in linhas:
+    while True:
 
-        colunas = [limpar(c.get_text()) for c in linha.find_all("td")]
+        soup = buscar_historico(session, first_day, last_day, start)
 
-        if len(colunas) < 11:
-            continue
+        linhas = soup.select("#table_id tbody tr")
 
-        try:
+        if not linhas:
+            break
 
-            id_campanha = int(colunas[0])
+        dados = []
 
-            tipo_nome = colunas[1]
-            nome = colunas[2]
-            centro_custo = colunas[3]
-            cliente_nome = colunas[4]
+        for linha in linhas:
 
-            id_tipo = tipos.get(tipo_nome)
-            id_cliente = clientes.get(cliente_nome)
+            colunas = [limpar(c.get_text()) for c in linha.find_all("td")]
 
-            if not id_cliente:
-                print(f"Cliente não encontrado: {cliente_nome}")
+            if len(colunas) < 11:
                 continue
 
-            registro = parse_data(colunas[5])
+            try:
 
-            arquivo = int(colunas[6])
-            envios = int(colunas[7])
-            blacklist = int(colunas[8])
-            erros = int(colunas[9])
-            valor = parse_valor(colunas[10])
+                id_campanha = int(colunas[0])
+                tipo_nome = colunas[1]
+                nome = colunas[2]
+                centro_custo = colunas[3]
 
-            status = colunas[11] if len(colunas) > 11 else "Finalizada"
+                id_tipo = tipos.get(tipo_nome)
 
-            dados.append((
-                id_campanha,
-                id_tipo,
-                nome,
-                centro_custo,
-                id_cliente,
-                registro,
-                arquivo,
-                envios,
-                blacklist,
-                erros,
-                valor,
-                status
-            ))
+                registro = parse_data(colunas[5])
 
-        except Exception as e:
+                arquivo = int(colunas[6])
+                envios = int(colunas[7])
+                blacklist = int(colunas[8])
+                erros = int(colunas[9])
+                valor = parse_valor(colunas[10])
 
-            print("Erro linha:", colunas, e)
+                status = colunas[11] if len(colunas) > 11 else "Finalizada"
 
-    sql = """
-    INSERT INTO whats_tb_historico
-    (id_campanha,id_tipo,nome,centro_custo,id_cliente,registro,arquivo,envios,blacklist,erros,valor,status)
-    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                dados.append((
+                    id_campanha,
+                    id_tipo,
+                    nome,
+                    centro_custo,
+                    registro,
+                    arquivo,
+                    envios,
+                    blacklist,
+                    erros,
+                    valor,
+                    status
+                ))
 
-    ON DUPLICATE KEY UPDATE
-        id_tipo=VALUES(id_tipo),
-        nome=VALUES(nome),
-        centro_custo=VALUES(centro_custo),
-        id_cliente=VALUES(id_cliente),
-        registro=VALUES(registro),
-        arquivo=VALUES(arquivo),
-        envios=VALUES(envios),
-        blacklist=VALUES(blacklist),
-        erros=VALUES(erros),
-        valor=VALUES(valor),
-        status=VALUES(status)
-    """
+            except Exception as e:
+                print("Erro linha:", colunas, e)
 
-    batch_size = 5000
+        if not dados:
+            break
 
-    for i in range(0, len(dados), batch_size):
+        sql = """
+        INSERT INTO whats_tb_historico
+        (id_campanha,id_tipo,nome,centro_custo,registro,arquivo,envios,blacklist,erros,valor,status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
-        lote = dados[i:i + batch_size]
+        ON DUPLICATE KEY UPDATE
+            id_tipo=VALUES(id_tipo),
+            nome=VALUES(nome),
+            centro_custo=VALUES(centro_custo),
+            registro=VALUES(registro),
+            arquivo=VALUES(arquivo),
+            envios=VALUES(envios),
+            blacklist=VALUES(blacklist),
+            erros=VALUES(erros),
+            valor=VALUES(valor),
+            status=VALUES(status)
+        """
 
-        cursor.executemany(sql, lote)
+        cursor.executemany(sql, dados)
 
         conn.commit()
 
-        total_registros += len(lote)
+        total_registros += len(dados)
 
-        print(f"Lote inserido: {len(lote)} registros")
+        print(f"Página {start} → {len(dados)} registros")
+
+        if len(linhas) < 1000:
+            break
+
+        start += 1000
 
     cursor.close()
     conn.close()
