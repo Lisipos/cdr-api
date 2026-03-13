@@ -106,3 +106,5 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
     conn.close()
 
     return total
+
+# dasdasdsad
