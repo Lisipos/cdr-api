@@ -154,3 +154,5 @@ def download(job_id: str):
         filename=os.path.basename(file_path),
         media_type="application/zip"
     )
+    
+    # Gabriel Costa
