@@ -36,13 +36,15 @@ def carregar_tipos(cursor):
 
     cursor.execute("""
         SELECT id_whats_tb_tipo, tipo
+        SELECT id_whats_tb_tipo, tipo
         FROM whats_tb_tipo
     """)
 
     return {tipo.strip(): tid for tid, tipo in cursor.fetchall()}
+    return {tipo.strip(): tid for tid, tipo in cursor.fetchall()}
 
 
-def buscar_historico(session, first_day, last_day, start):
+def buscar_historico(session, first_day, last_day):
 
     r = session.get(f"{BASE_URL}/historico", timeout=30)
 
@@ -59,8 +61,8 @@ def buscar_historico(session, first_day, last_day, start):
         "tarifa": "",
         "tarifa_v2": "",
         "v2": "3",
-        "length": "1000",
-        "start": str(start)
+        "length": "100000",
+        "start": "0"
     }
 
     r = session.post(
@@ -90,22 +92,23 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
         soup = buscar_historico(session, first_day, last_day, start)
 
-        linhas = soup.select("#table_id tbody tr")
+    linhas = soup.select("#table_id tbody tr")
 
         if not linhas:
             print("Nenhuma linha encontrada.")
             break
 
-        dados = []
+    dados = []
+    total_registros = 0
 
-        for linha in linhas:
+    for linha in linhas:
 
-            colunas = [limpar(c.get_text()) for c in linha.find_all("td")]
+        colunas = [limpar(c.get_text()) for c in linha.find_all("td")]
 
-            if len(colunas) < 11:
-                continue
+        if len(colunas) < 11:
+            continue
 
-            try:
+        try:
 
                 id_campanha = int(colunas[0])
 
@@ -121,15 +124,15 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
                 id_tipo = tipos.get(tipo_nome)
 
-                registro = parse_data(colunas[5])
+            registro = parse_data(colunas[5])
 
-                arquivo = int(colunas[6])
-                envios = int(colunas[7])
-                blacklist = int(colunas[8])
-                erros = int(colunas[9])
-                valor = parse_valor(colunas[10])
+            arquivo = int(colunas[6])
+            envios = int(colunas[7])
+            blacklist = int(colunas[8])
+            erros = int(colunas[9])
+            valor = parse_valor(colunas[10])
 
-                status = colunas[11] if len(colunas) > 11 else "Finalizada"
+            status = colunas[11] if len(colunas) > 11 else "Finalizada"
 
                 dados.append((
                     id_campanha,
@@ -145,8 +148,9 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                     status
                 ))
 
-            except Exception as e:
-                print("Erro linha:", colunas, e)
+        except Exception as e:
+
+            print("Erro linha:", colunas, e)
 
         if not dados:
             print("Nenhum registro novo encontrado. Encerrando.")
@@ -179,11 +183,17 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
             status=VALUES(status)
         """
 
-        cursor.executemany(sql, dados)
+    batch_size = 5000
+
+    for i in range(0, len(dados), batch_size):
+
+        lote = dados[i:i + batch_size]
+
+        cursor.executemany(sql, lote)
 
         conn.commit()
 
-        total_registros += len(dados)
+        total_registros += len(lote)
 
         print(f"Página {start} → {len(dados)} registros")
 

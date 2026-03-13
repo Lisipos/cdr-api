@@ -72,7 +72,7 @@ def historico_csv():
 
         file_path = baixar_csv_historico(
             session,
-            "2026-03-01T00:00",
+            "2026-01-01T00:00",
             "2026-03-12T23:59"
         )
 
