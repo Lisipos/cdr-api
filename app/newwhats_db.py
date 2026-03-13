@@ -11,25 +11,13 @@ def limpar(texto):
 
 
 def parse_valor(valor):
-
     valor = valor.replace("R$", "").strip()
     valor = valor.replace(".", "").replace(",", ".")
-
     return float(valor)
 
 
 def parse_data(data_str):
     return datetime.strptime(data_str, "%d/%m/%Y %H:%M:%S")
-
-
-def carregar_clientes(cursor):
-
-    cursor.execute("""
-        SELECT id_whats_tb_cliente, nome
-        FROM whats_tb_cliente
-    """)
-
-    return {nome.strip(): cid for cid, nome in cursor.fetchall()}
 
 
 def carregar_tipos(cursor):
@@ -77,7 +65,6 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
     conn = get_connection()
     cursor = conn.cursor()
 
-    clientes = carregar_clientes(cursor)
     tipos = carregar_tipos(cursor)
 
     start = 0
@@ -107,14 +94,8 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                 tipo_nome = colunas[1]
                 nome = colunas[2]
                 centro_custo = colunas[3]
-                cliente_nome = colunas[4]
 
                 id_tipo = tipos.get(tipo_nome)
-                id_cliente = clientes.get(cliente_nome)
-
-                if not id_cliente:
-                    print(f"Cliente não encontrado: {cliente_nome}")
-                    continue
 
                 registro = parse_data(colunas[5])
 
@@ -131,7 +112,6 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                     id_tipo,
                     nome,
                     centro_custo,
-                    id_cliente,
                     registro,
                     arquivo,
                     envios,
@@ -149,14 +129,13 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
         sql = """
         INSERT INTO whats_tb_historico
-        (id_campanha,id_tipo,nome,centro_custo,id_cliente,registro,arquivo,envios,blacklist,erros,valor,status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (id_campanha,id_tipo,nome,centro_custo,registro,arquivo,envios,blacklist,erros,valor,status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
         ON DUPLICATE KEY UPDATE
             id_tipo=VALUES(id_tipo),
             nome=VALUES(nome),
             centro_custo=VALUES(centro_custo),
-            id_cliente=VALUES(id_cliente),
             registro=VALUES(registro),
             arquivo=VALUES(arquivo),
             envios=VALUES(envios),
