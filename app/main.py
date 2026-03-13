@@ -97,8 +97,8 @@ def historico_mysql():
 
     total = salvar_historico_mysql_lote(
         session,
-        "2026-03-11T00:00",
-        "2026-03-11T23:59"
+        "2026-01-01T00:00",
+        "2026-03-13T23:59"
     )
 
     return {
