@@ -39,7 +39,7 @@ def obter_token():
 def calcular_periodo():
 
     agora = datetime.now()
-    dez_minutos = agora - timedelta(minutes=10)
+    dez_minutos = agora - timedelta(minutes=20)
 
     return {
         "dataI": dez_minutos.strftime("%d/%m/%Y"),

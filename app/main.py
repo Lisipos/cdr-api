@@ -1,21 +1,19 @@
-from fastapi import Depends
-from app.security import verificar_token
-from fastapi import FastAPI
-from fastapi import HTTPException
-from app.tasks import processar_cdr
-from celery.result import AsyncResult
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from app.models import CDRRequest
-from app.tasks import celery_app
+from celery.result import AsyncResult
 import os
-from celery.schedules import crontab
-from app.tasks import task_coletar_sip
-from app.sip_collect import coletar_sip_stats
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from app.config import SERVIDORES
+
+from app.models import CDRRequest
+from app.tasks import processar_cdr, celery_app, task_coletar_sip
+from app.config import EMAIL_WHATS, PASSWORD_WHATS
+from app.newwhats_auth import login_newwhats
+from app.newwhats_historico import buscar_historico_completo
+from app.newwhats_csv import baixar_csv_historico
+from app.newwhats_db import salvar_historico_mysql_lote
+from app.db import get_connection
 
 app = FastAPI()
-# app = FastAPI(dependencies=[Depends(verificar_token)])
+
 
 @app.post("/coletar-sip")
 def coletar_sip_manual():
@@ -28,36 +26,90 @@ def coletar_sip_manual():
     }
 
 
+@app.get("/newwhats/login")
+def login():
+
+    session = login_newwhats(EMAIL_WHATS, PASSWORD_WHATS)
+
+    r = session.get(
+        "https://newwhats.nvtelecom.com.br/dashboard",
+        timeout=30
+    )
+
+    return {
+        "status": "logado",
+        "dashboard_status": r.status_code
+    }
 
 
-# @app.get("/sip-report")
-# def sip_report():
+@app.get("/newwhats/historico")
+def historico():
 
-#     resultado = {}
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
 
-#     with ThreadPoolExecutor(max_workers=3) as executor:
+    cursor.execute("""
+        SELECT *
+        FROM newwhats_historico
+        ORDER BY registro DESC
+        LIMIT 100
+    """)
 
-#         futures = {
-#             executor.submit(coletar_sip_stats, url): nome
-#             for nome, url in SERVIDORES.items()
-#         }
+    dados = cursor.fetchall()
 
-#         for future in as_completed(futures):
+    cursor.close()
+    conn.close()
 
-#             nome = futures[future]
+    return dados
 
-#             try:
 
-#                 resultado[nome] = future.result()
+@app.get("/newwhats/historico/csv")
+def historico_csv():
 
-#             except Exception as e:
+    session = login_newwhats(EMAIL_WHATS, PASSWORD_WHATS)
 
-#                 resultado[nome] = {"erro": str(e)}
+    try:
 
-#     return resultado
+        file_path = baixar_csv_historico(
+            session,
+            "2026-03-01T00:00",
+            "2026-03-12T23:59"
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro gerando CSV: {str(e)}"
+        )
+
+    return FileResponse(
+        file_path,
+        media_type="text/csv",
+        filename=os.path.basename(file_path)
+    )
+
+
+@app.get("/newwhats/historico/mysql")
+def historico_mysql():
+
+    session = login_newwhats(EMAIL_WHATS, PASSWORD_WHATS)
+
+    total = salvar_historico_mysql_lote(
+        session,
+        "2026-03-11T00:00",
+        "2026-03-11T23:59"
+    )
+
+    return {
+        "status": "ok",
+        "registros_processados": total
+    }
+
 
 @app.post("/gerar-cdr")
 def gerar(dados: CDRRequest):
+
     task = processar_cdr.delay(
         dados.date_ini,
         dados.date_end,
@@ -71,6 +123,7 @@ def gerar(dados: CDRRequest):
 
 @app.get("/status/{job_id}")
 def status(job_id: str):
+
     task = AsyncResult(job_id, app=celery_app)
 
     return {
@@ -80,28 +133,19 @@ def status(job_id: str):
     }
 
 
-
-
 @app.get("/download/{job_id}")
 def download(job_id: str):
 
     task = AsyncResult(job_id, app=celery_app)
 
-    # 1️⃣ Verifica se existe
-    if not task:
-        raise HTTPException(status_code=404, detail="Job não encontrado")
-
-    # 2️⃣ Verifica status
     if task.status != "SUCCESS":
         raise HTTPException(
             status_code=400,
-            detail=f"Job ainda não finalizado. Status atual: {task.status}"
+            detail=f"Job ainda não finalizado. Status: {task.status}"
         )
 
-    # 3️⃣ Pega caminho retornado pela task
     file_path = task.result
 
-    # 4️⃣ Verifica se arquivo existe
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 

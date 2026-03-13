@@ -8,6 +8,14 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
+EMAIL_WHATS = os.getenv("EMAIL_WHATS")
+PASSWORD_WHATS = os.getenv("PASSWORD_WHATS")
+
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
+
 
 GRAPH_TENANT_ID = os.getenv("GRAPH_TENANT_ID")
 GRAPH_CLIENT_ID = os.getenv("GRAPH_CLIENT_ID")
