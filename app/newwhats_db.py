@@ -17,7 +17,19 @@ def parse_valor(valor):
 
 
 def parse_data(data_str):
-    return datetime.strptime(data_str, "%d/%m/%Y %H:%M:%S")
+
+    formatos = [
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S"
+    ]
+
+    for formato in formatos:
+        try:
+            return datetime.strptime(data_str, formato)
+        except ValueError:
+            continue
+
+    raise ValueError(f"Formato de data desconhecido: {data_str}")
 
 
 def carregar_tipos(cursor):
