@@ -118,7 +118,7 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                 tipo_nome = colunas[1]
                 nome = colunas[2]
                 centro_custo = colunas[3]
-
+                cliente = colunas[4]
                 id_tipo = tipos.get(tipo_nome)
 
                 registro = parse_data(colunas[5])
@@ -136,6 +136,7 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                     id_tipo,
                     nome,
                     centro_custo,
+                    cliente,
                     registro,
                     arquivo,
                     envios,
@@ -163,13 +164,14 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
         sql = """
         INSERT INTO whats_tb_historico
-        (id_campanha,id_tipo,nome,centro_custo,registro,arquivo,envios,blacklist,erros,valor,status)
+        (id_campanha,id_tipo,nome,centro_custo,cliente,registro,arquivo,envios,blacklist,erros,valor,status)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
         ON DUPLICATE KEY UPDATE
             id_tipo=VALUES(id_tipo),
             nome=VALUES(nome),
             centro_custo=VALUES(centro_custo),
+            cliente=VALUES(cliente),
             registro=VALUES(registro),
             arquivo=VALUES(arquivo),
             envios=VALUES(envios),
