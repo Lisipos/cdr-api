@@ -82,6 +82,10 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
     start = 0
     total_registros = 0
 
+    # proteção contra repetição
+    ids_processados = set()
+    ultimo_primeiro_id = None
+
     while True:
 
         soup = buscar_historico(session, first_day, last_day, start)
@@ -89,6 +93,7 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
         linhas = soup.select("#table_id tbody tr")
 
         if not linhas:
+            print("Nenhuma linha encontrada.")
             break
 
         dados = []
@@ -103,6 +108,13 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
             try:
 
                 id_campanha = int(colunas[0])
+
+                # evita reprocessar
+                if id_campanha in ids_processados:
+                    continue
+
+                ids_processados.add(id_campanha)
+
                 tipo_nome = colunas[1]
                 nome = colunas[2]
                 centro_custo = colunas[3]
@@ -137,7 +149,17 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                 print("Erro linha:", colunas, e)
 
         if not dados:
+            print("Nenhum registro novo encontrado. Encerrando.")
             break
+
+        primeiro_id_pagina = dados[0][0]
+
+        # detecta página repetida
+        if primeiro_id_pagina == ultimo_primeiro_id:
+            print("Página repetida detectada. Encerrando paginação.")
+            break
+
+        ultimo_primeiro_id = primeiro_id_pagina
 
         sql = """
         INSERT INTO whats_tb_historico
@@ -165,7 +187,9 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
         print(f"Página {start} → {len(dados)} registros")
 
+        # proteção se o portal ignorar start
         if len(linhas) < 1000:
+            print("Última página detectada.")
             break
 
         start += 1000
