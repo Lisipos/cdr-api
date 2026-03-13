@@ -11,10 +11,8 @@ def limpar(texto):
 
 
 def parse_valor(valor):
-
     valor = valor.replace("R$", "").strip()
     valor = valor.replace(".", "").replace(",", ".")
-
     return float(valor)
 
 
@@ -23,14 +21,18 @@ def parse_data(data_str):
     return datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S")
 
 
-def carregar_clientes(cursor):
+    formatos = [
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S"
+    ]
 
-    cursor.execute("""
-        SELECT id_whats_tb_cliente, nome
-        FROM whats_tb_cliente
-    """)
+    for formato in formatos:
+        try:
+            return datetime.strptime(data_str, formato)
+        except ValueError:
+            continue
 
-    return {nome.strip(): cid for cid, nome in cursor.fetchall()}
+    raise ValueError(f"Formato de data desconhecido: {data_str}")
 
 
 def carregar_tipos(cursor):
@@ -78,7 +80,6 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
     conn = get_connection()
     cursor = conn.cursor()
 
-    clientes = carregar_clientes(cursor)
     tipos = carregar_tipos(cursor)
 
     soup = buscar_historico(session, first_day, last_day)
