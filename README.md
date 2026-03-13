@@ -1,426 +1,303 @@
-# 📦 CDR API
+# CDR API – Processamento e Armazenamento de Relatórios
 
-API para geração e exportação de CDRs em formato ZIP utilizando processamento assíncrono com Celery.
-O projeto também inclui automações para monitoramento SIP e coleta de histórico de campanhas do NewWhats com armazenamento em banco de dados.
+API desenvolvida em **Python (FastAPI)** para coleta, processamento e armazenamento de relatórios CDR, com execução assíncrona utilizando **Celery + Redis** e deploy via **Docker**.
 
----
-
-# 🚀 Tecnologias
-
-* Python 3.11
-* FastAPI
-* Celery
-* Redis
-* Docker
-* MySQL
-* BeautifulSoup
-* Requests
+O sistema permite automatizar a coleta de relatórios, processar arquivos e salvar os dados diretamente em um banco **MySQL**.
 
 ---
 
-# 🏗 Arquitetura
-
-CDR:
-
-Cliente → FastAPI → Celery → API Externa (CDR) → Geração de ZIP → Download
-
-Monitor SIP:
-
-Celery Beat → Coleta servidores SIP → Análise de ASR → Geração HTML → Envio de Email
-
-NewWhats:
-
-Celery Beat → Login no portal → Coleta histórico → Download CSV / Parsing → Armazenamento MySQL
-
----
-
-# ⚙️ Configuração
-
-## 1️⃣ Criar arquivo `.env`
-
-Copie o arquivo `.env.example`:
-
-cp .env.example .env
-
-Edite com suas credenciais:
-
-EXTERNAL_API_TOKEN=seu_token_externo
-EXTERNAL_API_KEY=sua_api_key_externa
-INTERNAL_API_TOKEN=seu_token_interno
-
-Configuração Redis:
-
-REDIS_URL=redis://redis:6379/0
-
-Configuração MySQL:
-
-MYSQL_HOST=mysql
-MYSQL_USER=usuario
-MYSQL_PASSWORD=senha
-MYSQL_DATABASE=cdr
-
-Credenciais NewWhats:
-
-EMAIL_WHATS=seu_email
-PASSWORD_WHATS=sua_senha
-
----
-
-# 🐳 Executando com Docker
-
-```bash
-docker compose up --build
-```
-
-A API estará disponível em:
-
-http://localhost:8000
-
----
-
-# 🔐 Autenticação
-
-Todas as rotas exigem header:
-
-Authorization: Bearer SEU_INTERNAL_API_TOKEN
-
----
-
-# 📡 Endpoints
-
-## 🔹 Gerar CDR
-
-POST /gerar-cdr
-
-Body JSON:
+# Arquitetura do Sistema
 
 ```
-{
-  "date_ini": "2026-02-12",
-  "date_end": "2026-02-12",
-  "time_ini": "00:00:00",
-  "time_end": "23:59:59",
-  "start": 0,
-  "limit": 1000,
-  "device_id": 7389
-}
-```
-
-Retorno:
-
-```
-{
-  "job_id": "uuid-gerado"
-}
+            ┌─────────────┐
+            │   Cliente   │
+            │  (API Call) │
+            └──────┬──────┘
+                   │
+                   ▼
+            ┌─────────────┐
+            │   FastAPI   │
+            │    (API)    │
+            └──────┬──────┘
+                   │
+                   ▼
+            ┌─────────────┐
+            │    Redis    │
+            │  (Broker)   │
+            └──────┬──────┘
+                   │
+                   ▼
+            ┌─────────────┐
+            │   Celery    │
+            │   Worker    │
+            └──────┬──────┘
+                   │
+                   ▼
+            ┌─────────────┐
+            │   MySQL     │
+            │  Database   │
+            └─────────────┘
 ```
 
 ---
 
-## 🔹 Consultar Status da Task
+# Tecnologias Utilizadas
 
-GET /status/{job_id}
-
-Retorna o status da task no Celery.
-
----
-
-## 🔹 Download do ZIP
-
-GET /download/{job_id}
-
-Retorna o arquivo `.zip` contendo os CDRs processados.
+| Tecnologia | Função                   |
+| ---------- | ------------------------ |
+| FastAPI    | API REST                 |
+| Celery     | Processamento assíncrono |
+| Redis      | Broker de tarefas        |
+| MySQL      | Armazenamento de dados   |
+| Docker     | Containerização          |
+| Uvicorn    | Servidor ASGI            |
 
 ---
 
-## 🔹 Download do CSV do histórico NewWhats
-
-Endpoint que realiza login automático no portal NewWhats e gera o CSV do histórico de campanhas.
-
-GET /newwhats/csv
-
-Retorna o arquivo CSV gerado.
-
----
-
-## 🔹 Consultar histórico NewWhats armazenado
-
-GET /newwhats/historico
-
-Consulta os dados previamente coletados e armazenados no banco MySQL.
-
----
-
-# ⏰ Automação com Celery Beat
-
-O sistema executa tarefas automáticas:
-
-Monitor SIP:
-
-Executa a cada 20 minutos
-
-Funções:
-
-* coleta dados dos servidores SIP
-* calcula ASR
-* detecta rotas com baixa completamento
-* envia relatório por email
-
-Coleta NewWhats:
-
-Executa diariamente às 00:05
-
-Funções:
-
-* login automático no portal
-* coleta histórico do dia anterior
-* parsing dos dados
-* inserção em lote no MySQL
-
----
-
-# 🗄 Banco de Dados
-
-Tabela utilizada para armazenar histórico de campanhas:
+# Estrutura do Projeto
 
 ```
-CREATE TABLE newwhats_historico (
-    id_campanha BIGINT PRIMARY KEY,
-    tipo VARCHAR(100),
+cdr-api
+│
+├── app
+│   ├── main.py           # API principal
+│   ├── tasks.py          # Tasks do Celery
+│   ├── database.py       # Conexão com banco
+│   ├── models.py         # Estrutura das tabelas
+│   └── config.py         # Configurações do sistema
+│
+├── exports               # Relatórios exportados
+├── output                # Arquivos processados
+│
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── README.md
+```
+
+---
+
+# Estrutura da Tabela MySQL
+
+Tabela utilizada para armazenar os dados processados:
+
+```sql
+CREATE TABLE campanhas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_campanha VARCHAR(50),
+    tipo VARCHAR(50),
     nome VARCHAR(255),
-    centro_custo VARCHAR(255),
-    cliente VARCHAR(255),
+    centro_custo VARCHAR(100),
+    cliente VARCHAR(100),
     registro DATETIME,
-    arquivo INT,
+    arquivo VARCHAR(255),
     envios INT,
     blacklist INT,
     erros INT,
-    valor DECIMAL(12,5)
+    valor DECIMAL(10,2)
 );
 ```
 
-A inserção utiliza:
-
-* bulk insert (`executemany`)
-* `ON DUPLICATE KEY UPDATE` para evitar duplicidade
-
 ---
 
-# 📂 Estrutura do Projeto
+# Endpoint da API
+
+## Processar relatórios
 
 ```
-app/
- ├── main.py
- ├── tasks.py
- ├── config.py
- ├── security.py
- ├── models.py
- ├── cdr_service.py
- ├── sip_collect.py
- ├── newwhats_auth.py
- ├── newwhats_csv.py
- ├── newwhats_db.py
- └── db.py
-
-docker-compose.yml
-Dockerfile
-requirements.txt
+POST /processar
 ```
 
----
+Esse endpoint:
 
-# 📌 Observações
-
-* Processamento assíncrono via Celery
-* Redis utilizado como broker e backend
-* Tasks automáticas via Celery Beat
-* Coleta automatizada do portal NewWhats
-* Inserção em lote no banco para melhor performance
-* Tokens e credenciais nunca devem ser versionados
-* Utilize `.env` para variáveis sensíveis
+1. Lê os arquivos de relatório
+2. Processa os dados
+3. Salva no banco MySQL
+4. Executa o processamento em background com Celery
 
 ---
 
-## 🚀 Deploy no Ubuntu
+# Execução com Docker
 
-A seguir estão os passos para subir a aplicação em um servidor **Ubuntu** utilizando Docker.
+## 1. Build do projeto
 
----
-
-### 1️⃣ Atualizar o sistema
-
-```bash
-sudo apt update && sudo apt upgrade -y
+```
+docker compose build
 ```
 
 ---
 
-### 2️⃣ Instalar Docker
+## 2. Subir os containers
 
-```bash
-sudo apt install -y docker.io
-sudo systemctl enable docker
-sudo systemctl start docker
 ```
-
-Verifique a instalação:
-
-```bash
-docker --version
+docker compose up -d
 ```
 
 ---
 
-### 3️⃣ Instalar Docker Compose
-
-```bash
-sudo apt install -y docker-compose-plugin
-```
-
-Verifique:
-
-```bash
-docker compose version
-```
-
----
-
-### 4️⃣ Clonar o repositório
-
-```bash
-git clone https://seu-repositorio.git
-cd CDR-API
-```
-
----
-
-### 5️⃣ Criar o arquivo `.env`
-
-Copie o arquivo de exemplo:
-
-```bash
-cp .env.example .env
-```
-
-Edite o arquivo:
-
-```bash
-nano .env
-```
-
-Configure suas credenciais:
+## 3. Ver containers rodando
 
 ```
-EXTERNAL_API_TOKEN=seu_token_externo
-EXTERNAL_API_KEY=sua_api_key_externa
-INTERNAL_API_TOKEN=seu_token_interno
-
-REDIS_URL=redis://redis:6379/0
-
-MYSQL_HOST=mysql
-MYSQL_USER=usuario
-MYSQL_PASSWORD=senha
-MYSQL_DATABASE=cdr
-
-EMAIL_WHATS=seu_email
-PASSWORD_WHATS=sua_senha
-```
-
----
-
-### 6️⃣ Subir os containers
-
-```bash
-docker compose up -d --build
-```
-
-Isso irá iniciar:
-
-* API (FastAPI)
-* Worker Celery
-* Celery Beat (agendador de tarefas)
-* Redis (broker do Celery)
-
----
-
-### 7️⃣ Verificar containers
-
-```bash
 docker ps
 ```
 
----
+Containers esperados:
 
-### 8️⃣ Ver logs
-
-Logs da API:
-
-```bash
-docker compose logs -f api
 ```
-
-Logs do worker Celery:
-
-```bash
-docker compose logs -f worker
-```
-
-Logs do scheduler:
-
-```bash
-docker compose logs -f beat
+api
+worker
+beat
+redis
 ```
 
 ---
 
-### 9️⃣ Acessar a API
+# Acessar API
 
-A API ficará disponível em:
-
-```
-http://IP_DO_SERVIDOR:8000
-```
-
-Documentação automática do FastAPI:
+Após subir o projeto:
 
 ```
 http://IP_DO_SERVIDOR:8000/docs
 ```
 
+Interface automática do **FastAPI**.
+
 ---
 
-### 🔄 Atualizar aplicação
+# Agendamentos Automáticos
 
-Quando houver alterações no código:
+O sistema utiliza **Celery Beat** para executar tarefas programadas.
 
-```bash
-git pull
+### Executar processamento diariamente
+
+```
+00:00
+```
+
+Configuração:
+
+```python
+crontab(hour=0, minute=0)
+```
+
+---
+
+# Deploy no Servidor
+
+## Clonar projeto
+
+```
+git clone https://seu-repositorio.git
+cd cdr-api
+```
+
+---
+
+## Subir containers
+
+```
 docker compose up -d --build
 ```
 
 ---
 
-### 🛑 Parar a aplicação
+## Atualizar versão
 
-```bash
+Quando houver nova versão:
+
+```
+git pull
 docker compose down
+docker compose up -d --build
 ```
 
 ---
 
-### 📌 Executar automaticamente ao iniciar o servidor (opcional)
+# Padrão de Branches
 
-Para garantir que os containers iniciem após reboot:
+| Branch  | Função          |
+| ------- | --------------- |
+| main    | Produção        |
+| develop | Desenvolvimento |
 
-```bash
-sudo systemctl enable docker
+Branches auxiliares:
+
+```
+feature/nova-funcionalidade
+fix/correcao-bug
+hotfix/correcao-producao
+docs/documentacao
 ```
 
-E utilize no `docker-compose.yml`:
+---
+
+# Padrão de Commits
+
+Formato utilizado:
 
 ```
-restart: always
+tipo: descrição
 ```
 
-# 👨‍💻 Autor
+Exemplos:
 
-Felipe Uglar
+```
+feat: adiciona salvamento de campanhas no MySQL
+fix: corrige erro de schedule celery
+build: adiciona docker-compose
+docs: adiciona guia de deploy
+```
+
+Tipos de commit:
+
+| Tipo     | Uso                      |
+| -------- | ------------------------ |
+| feat     | nova funcionalidade      |
+| fix      | correção de bug          |
+| docs     | documentação             |
+| build    | mudanças de build/docker |
+| refactor | refatoração              |
+| perf     | melhoria de performance  |
+
+---
+
+# Logs do Sistema
+
+Ver logs dos containers:
+
+```
+docker compose logs
+```
+
+Logs específicos:
+
+```
+docker compose logs api
+docker compose logs worker
+docker compose logs beat
+```
+
+---
+
+# Boas Práticas
+
+* Commits pequenos e descritivos
+* Uso de branches para novas funcionalidades
+* Processamento assíncrono com Celery
+* Uso de Docker para padronização do ambiente
+
+---
+
+# Melhorias Futuras
+
+* Dashboard de acompanhamento
+* Sistema de retries nas tasks
+* Monitoramento com Flower
+* Métricas Prometheus
+* Logs estruturados
+
+---
+
+# Autor
+
+Projeto desenvolvido para automação de processamento de CDR e relatórios de campanhas.
