@@ -11,35 +11,35 @@ def limpar(texto):
 
 
 def parse_valor(valor):
-
     valor = valor.replace("R$", "").strip()
     valor = valor.replace(".", "").replace(",", ".")
-
     return float(valor)
 
 
 def parse_data(data_str):
-    return datetime.strptime(data_str, "%d/%m/%Y %H:%M:%S")
 
+    formatos = [
+        "%Y-%m-%d %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S"
+    ]
 
-def carregar_clientes(cursor):
+    for formato in formatos:
+        try:
+            return datetime.strptime(data_str, formato)
+        except ValueError:
+            continue
 
-    cursor.execute("""
-        SELECT id_whats_tb_cliente, nome
-        FROM whats_tb_cliente
-    """)
-
-    return {nome.strip(): cid for cid, nome in cursor.fetchall()}
+    raise ValueError(f"Formato de data desconhecido: {data_str}")
 
 
 def carregar_tipos(cursor):
 
     cursor.execute("""
-        SELECT id_whats_tb_tipo, nome
+        SELECT id_whats_tb_tipo, tipo
         FROM whats_tb_tipo
     """)
 
-    return {nome.strip(): tid for tid, nome in cursor.fetchall()}
+    return {tipo.strip(): tid for tid, tipo in cursor.fetchall()}
 
 
 def buscar_historico(session, first_day, last_day, start):
@@ -77,11 +77,14 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
     conn = get_connection()
     cursor = conn.cursor()
 
-    clientes = carregar_clientes(cursor)
     tipos = carregar_tipos(cursor)
 
     start = 0
     total_registros = 0
+
+    # proteção contra repetição
+    ids_processados = set()
+    ultimo_primeiro_id = None
 
     while True:
 
@@ -90,6 +93,7 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
         linhas = soup.select("#table_id tbody tr")
 
         if not linhas:
+            print("Nenhuma linha encontrada.")
             break
 
         dados = []
@@ -104,17 +108,18 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
             try:
 
                 id_campanha = int(colunas[0])
+
+                # evita reprocessar
+                if id_campanha in ids_processados:
+                    continue
+
+                ids_processados.add(id_campanha)
+
                 tipo_nome = colunas[1]
                 nome = colunas[2]
                 centro_custo = colunas[3]
-                cliente_nome = colunas[4]
 
                 id_tipo = tipos.get(tipo_nome)
-                id_cliente = clientes.get(cliente_nome)
-
-                if not id_cliente:
-                    print(f"Cliente não encontrado: {cliente_nome}")
-                    continue
 
                 registro = parse_data(colunas[5])
 
@@ -131,7 +136,6 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                     id_tipo,
                     nome,
                     centro_custo,
-                    id_cliente,
                     registro,
                     arquivo,
                     envios,
@@ -145,18 +149,27 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
                 print("Erro linha:", colunas, e)
 
         if not dados:
+            print("Nenhum registro novo encontrado. Encerrando.")
             break
+
+        primeiro_id_pagina = dados[0][0]
+
+        # detecta página repetida
+        if primeiro_id_pagina == ultimo_primeiro_id:
+            print("Página repetida detectada. Encerrando paginação.")
+            break
+
+        ultimo_primeiro_id = primeiro_id_pagina
 
         sql = """
         INSERT INTO whats_tb_historico
-        (id_campanha,id_tipo,nome,centro_custo,id_cliente,registro,arquivo,envios,blacklist,erros,valor,status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        (id_campanha,id_tipo,nome,centro_custo,registro,arquivo,envios,blacklist,erros,valor,status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 
         ON DUPLICATE KEY UPDATE
             id_tipo=VALUES(id_tipo),
             nome=VALUES(nome),
             centro_custo=VALUES(centro_custo),
-            id_cliente=VALUES(id_cliente),
             registro=VALUES(registro),
             arquivo=VALUES(arquivo),
             envios=VALUES(envios),
@@ -174,7 +187,9 @@ def salvar_historico_mysql_lote(session, first_day, last_day):
 
         print(f"Página {start} → {len(dados)} registros")
 
+        # proteção se o portal ignorar start
         if len(linhas) < 1000:
+            print("Última página detectada.")
             break
 
         start += 1000
