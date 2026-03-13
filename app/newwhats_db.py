@@ -35,11 +35,11 @@ def carregar_clientes(cursor):
 def carregar_tipos(cursor):
 
     cursor.execute("""
-        SELECT id_whats_tb_tipo, nome
+        SELECT id_whats_tb_tipo, tipo
         FROM whats_tb_tipo
     """)
 
-    return {nome.strip(): tid for tid, nome in cursor.fetchall()}
+    return {tipo.strip(): tid for tid, tipo in cursor.fetchall()}
 
 
 def buscar_historico(session, first_day, last_day, start):
