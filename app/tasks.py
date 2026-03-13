@@ -105,7 +105,7 @@ def task_coletar_newwhats_mysql():
 celery_app.conf.beat_schedule = {
     "monitor-sip-cada-1-h": {
         "task": "task_coletar_sip",
-        "schedule": crontab(hours=1),
+        "schedule": crontab(minute=0),
     },
     # "newwhats-csv-meia-noite": {
     #     "task": "task_newwhats_csv",
